@@ -1,19 +1,30 @@
 
-import { AES, getM3U8 } from './m3u8.ts';
+import { Fragment, M3U8 } from "./m3u8.ts";
 
-export async function download(url: string, thread: number) {
-    const m3u8 = await getM3U8(url);
-    for(const fragment of m3u8.fragments) {
-        fragment.data = await downloadFragment(url, 0, m3u8.aes);
+(self as Worker).addEventListener("message", async ({ data: { m3u8, fragment, index } }) => {
+    console.log(m3u8, fragment, index);
+    // self.postMessage(data);
+    // await downloadFragment(m3u8, fragment, index);
+
+}, false);
+
+export async function downloadFragment(m3u8: M3U8, fragment: Fragment, index: number): Promise<ArrayBuffer> {
+    const { headers, body } = await fetch(fragment.url);
+    // reader
+    if(!body) return new ArrayBuffer(0);
+    const reader = body.getReader();
+    // content length
+    if(!headers) return new ArrayBuffer(0);
+    const contentLength = parseInt(headers.get("Content-Length") || "0");
+    // read
+    let offset = 0;
+    const chunks = new Uint8Array(contentLength);
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.set(value, offset);
+        offset += value.length;
     }
-    console.log(m3u8.fragments);
+    if(!m3u8.aes) return chunks.buffer;
+    return m3u8.aes.decipher.decrypt(chunks).buffer
 }
-
-export async function downloadFragment(url: string, index: number, aes?: AES): Promise<ArrayBuffer> {
-    const result = await fetch(url);
-    const buffer = await result.arrayBuffer();
-    if(!aes) return buffer;
-    return aes.decipher.decrypt(new Uint8Array(buffer)).buffer
-}
-
-console.log(await download("http://1257120875.vod2.myqcloud.com/0ef121cdvodtransgzp1257120875/3055695e5285890780828799271/v.f230.m3u8", 1));
