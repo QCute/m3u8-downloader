@@ -1,10 +1,6 @@
 import { basename } from "https://deno.land/std@0.198.0/path/mod.ts";
 import { Aes } from "https://deno.land/x/crypto@v0.10.1/aes.ts";
 import { Cbc, Padding } from "https://deno.land/x/crypto@v0.10.1/block-modes.ts";
-// import { require } from "https://deno.land/x/require/mod.ts"
-// import * as MUX from "https://cdn.jsdelivr.net/npm/mux.js@6.3.0/es/index.js";
-// import * as ts2mp4 from "npm:video-converter-ts-into-mp4";
-// console.log(ts2mp4);
 
 export declare interface M3U8 {
     url: string;
@@ -17,8 +13,10 @@ export declare interface M3U8 {
 export declare interface Fragment {
     line: string, 
     url: string,
+    index: number,
     data: ArrayBuffer, 
-    status: number,
+    progress: number,
+    length: number,
 }
 
 export async function getM3U8(url: string): Promise<M3U8> {
@@ -37,8 +35,8 @@ export async function getM3U8(url: string): Promise<M3U8> {
     const fragments = m3u8
         .split("\n")
         .filter(line => /^[^#]/.test(line))
-        .map(line => {
-            return { line, url: parseURL(url, line), data: new ArrayBuffer(0), status: 0 }
+        .map((line, index) => {
+            return { line, url: parseURL(url, line), index, data: new ArrayBuffer(0), progress: 0, length: 0 }
         });
     // check aes
     const aes = await getAES(url, m3u8);

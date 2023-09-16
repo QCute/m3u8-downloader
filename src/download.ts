@@ -1,30 +1,31 @@
 
 import { Fragment, M3U8 } from "./m3u8.ts";
 
-(self as Worker).addEventListener("message", async ({ data: { m3u8, fragment, index } }) => {
-    console.log(m3u8, fragment, index);
-    // self.postMessage(data);
-    // await downloadFragment(m3u8, fragment, index);
-
+self.addEventListener("message", async ({ data: { m3u8, fragment } }) => {
+    await downloadFragment(m3u8, fragment);
 }, false);
 
-export async function downloadFragment(m3u8: M3U8, fragment: Fragment, index: number): Promise<ArrayBuffer> {
-    const { headers, body } = await fetch(fragment.url);
-    // reader
-    if(!body) return new ArrayBuffer(0);
-    const reader = body.getReader();
+export async function downloadFragment(m3u8: M3U8, fragment: Fragment): Promise<void> {
+    const { status, statusText, headers, body } = await fetch(fragment.url);
     // content length
-    if(!headers) return new ArrayBuffer(0);
-    const contentLength = parseInt(headers.get("Content-Length") || "0");
+    if(!headers) return self.postMessage({ status, statusText });
+    const length = parseInt(headers.get("Content-Length") || "0");
+    // reader
+    if(!body) return self.postMessage({ status, statusText });
+    const reader = body.getReader();
     // read
     let offset = 0;
-    const chunks = new Uint8Array(contentLength);
+    const chunks = new Uint8Array(length);
     while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        if (!value) break;
         chunks.set(value, offset);
         offset += value.length;
+        self.postMessage({ progress: value.length, length });
     }
-    if(!m3u8.aes) return chunks.buffer;
-    return m3u8.aes.decipher.decrypt(chunks).buffer
+    fragment.data = m3u8.aes ? m3u8.aes.decipher.decrypt(chunks).buffer : chunks.buffer;
+    fragment.status = 1;
+    self.postMessage({ fragment });
+    // return fragment;
 }
